@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="ja" class="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>BAEL ENGINE HUB</title>
+
+<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+
+<style>
+
+body{
+    background:linear-gradient(to bottom,#111827,#1f2937);
+    color:#e5e7eb;
+    font-family:Arial,sans-serif;
+    overflow-x:hidden;
+}
+
+.light body{
+    background:linear-gradient(to bottom,#f3f4f6,#e5e7eb);
+    color:#111827;
+}
+
+/* =========================
+   HERO
+========================= */
+
+.hero{
+    padding:100px 20px 80px;
+    text-align:center;
+}
+
+.hero h1{
+    font-size:3rem;
+    font-weight:bold;
+}
+
+.hero p{
+    margin-top:20px;
+    font-size:1.2rem;
+    opacity:0.9;
+}
+
+/* =========================
+   CARD
+========================= */
+
+.tool-card{
+    background:#1f2937;
+    border:1px solid rgba(255,255,255,0.08);
+
+    transition:0.25s;
+
+    height:100%;
+}
+
+.tool-card:hover{
+    transform:translateY(-8px) scale(1.02);
+    box-shadow:0 0 25px rgba(45,136,255,0.35);
+}
+
+.light .tool-card{
+    background:#ffffff;
+    color:#111827;
+}
+
+.tool-button{
+    display:inline-block;
+
+    margin-top:16px;
+    padding:10px 16px;
+
+    border-radius:8px;
+
+    background:#2d88ff;
+    color:white;
+
+    text-decoration:none;
+
+    transition:0.2s;
+}
+
+.tool-button:hover{
+    background:#58a2ff;
+}
+
+/* =========================
+   HEADER
+========================= */
+
+header{
+    position:sticky;
+    top:0;
+
+    z-index:100;
+
+    backdrop-filter:blur(10px);
+
+    background:rgba(17,24,39,0.85);
+
+    border-bottom:1px solid rgba(255,255,255,0.08);
+}
+
+.light header{
+    background:rgba(255,255,255,0.85);
+}
+
+/* =========================
+   SECTION
+========================= */
+
+.section-title{
+    font-size:2rem;
+    font-weight:bold;
+    text-align:center;
+    margin-bottom:40px;
+}
+
+/* =========================
+   FEATURE
+========================= */
+
+.feature-box{
+    background:rgba(255,255,255,0.04);
+    border:1px solid rgba(255,255,255,0.06);
+
+    border-radius:16px;
+    padding:24px;
+}
+
+.light .feature-box{
+    background:white;
+}
+
+/* =========================
+   FOOTER
+========================= */
+
+footer{
+    border-top:1px solid rgba(255,255,255,0.08);
+}
+
+/* =========================
+   BG EFFECT
+========================= */
+
+.bg-glow{
+    position:fixed;
+    width:500px;
+    height:500px;
+
+    background:rgba(45,136,255,0.12);
+
+    filter:blur(100px);
+
+    border-radius:50%;
+
+    z-index:-1;
+}
+
+.glow1{
+    top:-150px;
+    left:-100px;
+}
+
+.glow2{
+    bottom:-150px;
+    right:-100px;
+}
+
+</style>
+</head>
+
+<body class="min-h-screen flex flex-col">
+
+<div class="bg-glow glow1"></div>
+<div class="bg-glow glow2"></div>
+
+<!-- =========================
+     HEADER
+========================= -->
+
+<header class="p-4">
+<div class="container mx-auto flex justify-between items-center">
+
+<h1 class="text-2xl font-bold">
+BAEL ENGINE HUB
+</h1>
+
+<div class="flex items-center space-x-4">
+
+<nav>
+<a href="#tools" class="mx-2 hover:text-blue-400">ツール</a>
+<a href="#features" class="mx-2 hover:text-blue-400">特徴</a>
+<a href="#contact" class="mx-2 hover:text-blue-400">連絡先</a>
+</nav>
+
+<button id="themeToggle"
+class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded">
+ライトモード
+</button>
+
+</div>
+
+</div>
+</header>
+
+<!-- =========================
+     HERO
+========================= -->
+
+<section class="hero">
+
+<h1>BAEL GAME ENGINE</h1>
+
+<p>
+モデリング、マップ編集、ゲーム制作を<br>
+ひとつにつなぐ開発ハブ
+</p>
+
+<div class="mt-8">
+
+<a href="#tools"
+class="tool-button">
+ツールを見る
+</a>
+
+</div>
+
+</section>
+
+<!-- =========================
+     TOOLS
+========================= -->
+
+<section id="tools" class="container mx-auto py-16 px-4">
+
+<h2 class="section-title">
+開発ツール
+</h2>
+
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+
+<!-- MODEL -->
+
+<div class="tool-card rounded-2xl p-8">
+
+<h3 class="text-2xl font-bold">
+PART EDITOR
+</h3>
+
+<p class="mt-4 leading-relaxed">
+3Dパーツを自由に作成できる
+モデリングツール。
+BOX・SPHERE・CYLINDERなどを
+組み合わせてゲーム用データを生成。
+</p>
+
+<ul class="mt-6 space-y-2 text-sm opacity-80">
+<li>✔ パーツ配置</li>
+<li>✔ 回転・拡大縮小</li>
+<li>✔ JSON保存</li>
+<li>✔ 透明度変更</li>
+<li>✔ 色変更</li>
+</ul>
+
+<a href="model.html"
+class="tool-button">
+起動 →
+</a>
+
+</div>
+
+<!-- MAP -->
+
+<div class="tool-card rounded-2xl p-8">
+
+<h3 class="text-2xl font-bold">
+MAP EDITOR
+</h3>
+
+<p class="mt-4 leading-relaxed">
+2Dと3Dを同時に確認しながら
+マップを構築できるエディタ。
+タイル設置と高さ編集に対応。
+</p>
+
+<ul class="mt-6 space-y-2 text-sm opacity-80">
+<li>✔ タイル配置</li>
+<li>✔ 高低差編集</li>
+<li>✔ 3Dプレビュー</li>
+<li>✔ スロット切替</li>
+<li>✔ JSON保存</li>
+</ul>
+
+<a href="map.html"
+class="tool-button">
+起動 →
+</a>
+
+</div>
+
+<!-- PNG TOOL -->
+
+<div class="tool-card rounded-2xl p-8">
+
+<h3 class="text-2xl font-bold">
+PNG CREATOR
+</h3>
+
+<p class="mt-4 leading-relaxed">
+シームレステクスチャや
+ドットPNGを作成できる
+画像制作ツール。
+ゲーム素材制作向け。
+</p>
+
+<ul class="mt-6 space-y-2 text-sm opacity-80">
+<li>✔ ドット描画</li>
+<li>✔ シームレス確認</li>
+<li>✔ PNG保存</li>
+<li>✔ グリッド表示</li>
+<li>✔ テクスチャ制作</li>
+</ul>
+
+<a href="png.html"
+class="tool-button">
+起動 →
+</a>
+
+</div>
+
+</div>
+
+</section>
+
+<!-- =========================
+     FEATURE
+========================= -->
+
+<section id="features"
+class="container mx-auto py-16 px-4">
+
+<h2 class="section-title">
+特徴
+</h2>
+
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+<div class="feature-box">
+<h3 class="text-xl font-bold mb-3">
+JSON連携
+</h3>
+
+<p>
+モデリングツールとマップエディタを
+同じデータ構造で扱えるように設計。
+ゲーム側への読み込みを簡単に。
+</p>
+</div>
+
+<div class="feature-box">
+<h3 class="text-xl font-bold mb-3">
+ブラウザ動作
+</h3>
+
+<p>
+インストール不要。
+HTMLだけで動く軽量ゲーム開発環境。
+Three.jsベース。
+</p>
+</div>
+
+<div class="feature-box">
+<h3 class="text-xl font-bold mb-3">
+ゲーム開発向け
+</h3>
+
+<p>
+単なるモデリングではなく、
+実際にゲームで使うことを前提に
+設計されたツール群。
+</p>
+</div>
+
+</div>
+
+</section>
+
+<!-- =========================
+     CONTACT
+========================= -->
+
+<section id="contact"
+class="container mx-auto py-16 text-center px-4">
+
+<h2 class="section-title">
+CONTACT
+</h2>
+
+<p class="text-lg">
+開発情報・更新情報
+</p>
+
+<p class="mt-4">
+X :
+<a
+href="https://x.com/nevergiveupbael"
+class="text-blue-400 hover:text-blue-300">
+@nevergiveupbael
+</a>
+</p>
+
+</section>
+
+<!-- =========================
+     FOOTER
+========================= -->
+
+<footer class="p-6 text-center mt-auto">
+
+<p>
+© 2026 BAEL GAME ENGINE
+</p>
+
+<p class="mt-2 text-sm opacity-70">
+Browser Based Game Development Tools
+</p>
+
+</footer>
+
+<!-- =========================
+     THEME
+========================= -->
+
+<script>
+
+const toggle = document.getElementById("themeToggle");
+const html = document.documentElement;
+
+if(localStorage.getItem("theme")==="light"){
+    html.classList.remove("dark");
+    html.classList.add("light");
+    toggle.textContent = "ダークモード";
+}
+
+toggle.onclick = ()=>{
+
+    if(html.classList.contains("dark")){
+
+        html.classList.remove("dark");
+        html.classList.add("light");
+
+        localStorage.setItem("theme","light");
+
+        toggle.textContent = "ダークモード";
+
+    }else{
+
+        html.classList.remove("light");
+        html.classList.add("dark");
+
+        localStorage.setItem("theme","dark");
+
+        toggle.textContent = "ライトモード";
+    }
+};
+
+</script>
+
+</body>
+</html>

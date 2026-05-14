@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TEXTURE MAP EDITOR</title>
+
+<style>
+body{
+    margin:0;
+    overflow:hidden;
+    display:flex;
+    background:#111;
+    color:white;
+    font-family:sans-serif;
+}
+
+/* =========================
+   左メニュー
+========================= */
+#sidebar{
+    position:fixed;
+    left:0;
+    top:0;
+    width:220px;
+    height:100%;
+    background:rgba(0,0,0,0.92);
+    border-right:1px solid #333;
+    padding:10px;
+    box-sizing:border-box;
+    overflow-y:auto;
+    z-index:100;
+    transition:transform 0.25s ease;
+}
+
+#sidebar.hidden{
+    transform:translateX(-100%);
+}
+
+#toggleMenu{
+    position:fixed;
+    top:10px;
+    left:230px;
+    z-index:110;
+
+    background:#2d88ff;
+    color:white;
+    border:none;
+    border-radius:6px;
+
+    padding:8px 12px;
+    cursor:pointer;
+}
+
+/* =========================
+   2D
+========================= */
+#editor{
+    width:50%;
+    height:100vh;
+
+    margin-left:220px;
+
+    display:flex;
+    justify-content:center;
+    align-items:center;
+
+    background:#181818;
+    border-right:2px solid #333;
+
+    position:relative;
+}
+
+#gridWrap{
+    position:relative;
+    width:650px;
+    height:650px;
+}
+
+.cell{
+    position:absolute;
+    width:25px;
+    height:25px;
+
+    border:1px solid rgba(255,255,255,0.08);
+    box-sizing:border-box;
+
+    background-size:cover;
+    background-position:center;
+}
+
+/* =========================
+   3D
+========================= */
+#view{
+    width:50%;
+    height:100vh;
+    display:block;
+}
+
+/* =========================
+   UI
+========================= */
+button,select{
+    width:100%;
+    margin-top:6px;
+    padding:8px;
+
+    background:#222;
+    color:white;
+
+    border:none;
+    border-radius:6px;
+}
+
+button:hover{
+    background:#333;
+}
+
+hr{
+    border:none;
+    border-top:1px solid #444;
+    margin:12px 0;
+}
+</style>
+</head>
+
+<body>
+
+<!-- =========================
+   MENU
+========================= -->
+<div id="sidebar">
+
+<h2>MAP EDITOR</h2>
+
+<hr>
+
+<div>TILE SELECT</div>
+<select id="tileSelect"></select>
+
+<div style="margin-top:10px;">SLOT</div>
+<select id="slotSelect">
+<option value="1">1</option>
+<option value="2">2</option>
+<option value="3">3</option>
+<option value="4">4</option>
+<option value="5">5</option>
+<option value="6">6</option>
+<option value="7">7</option>
+<option value="8">8</option>
+<option value="9">9</option>
+</select>
+
+<button id="assignSlot">ASSIGN SLOT</button>
+
+<hr>
+
+<button id="eraseBtn">ERASE : OFF</button>
+
+<hr>
+
+<button id="saveBtn">SAVE JSON</button>
+<button id="loadBtn">LOAD JSON</button>
+
+<input type="file" id="fileLoad" style="display:none;">
+
+<hr>
+
+<div style="font-size:12px; line-height:1.6;">
+WASD : MOVE<br>
+Q/E : HEIGHT<br>
+CLICK : PLACE<br>
+DELETE : REMOVE<br>
+0 : MENU
+</div>
+
+</div>
+
+<button id="toggleMenu">✕</button>
+
+<!-- =========================
+   2D
+========================= -->
+<div id="editor">
+    <div id="gridWrap"></div>
+</div>
+
+<!-- =========================
+   3D
+========================= -->
+<canvas id="view"></canvas>
+
+<script type="module">
+
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160/build/three.module.js";
+
+/* =========================
+   TEXTURES
+========================= */
+
+const tileTypes = {
+
+    grass:"textures/grass.png",
+    stone:"textures/stone.png",
+    sand:"textures/sand.png",
+    brick:"textures/brick.png",
+    soil:"textures/soil.png"
+
+};
+
+/* =========================
+   TEXTURE LOAD
+========================= */
+
+const loader = new THREE.TextureLoader();
+const textures = {};
+
+for(const k in tileTypes){
+
+    const tex = loader.load(tileTypes[k]);
+
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+
+    tex.magFilter = THREE.NearestFilter;
+
+    textures[k] = tex;
+}
+
+/* =========================
+   DATA
+========================= */
+
+const tiles = {};
+const dom = {};
+const slots = {};
+
+let selectedTile = "grass";
+
+function key(x,z){
+    return x + "," + z;
+}
+
+function get(x,z){
+
+    const k = key(x,z);
+
+    if(!tiles[k]){
+        tiles[k] = {
+            h:0,
+            m:selectedTile
+        };
+    }
+
+    return tiles[k];
+}
+
+/* =========================
+   UI INIT
+========================= */
+
+const tileSelect = document.getElementById("tileSelect");
+
+for(const k in tileTypes){
+
+    const o = document.createElement("option");
+
+    o.value = k;
+    o.textContent = k;
+
+    tileSelect.appendChild(o);
+}
+
+tileSelect.onchange = ()=>{
+    selectedTile = tileSelect.value;
+};
+
+/* =========================
+   2D
+========================= */
+
+const wrap = document.getElementById("gridWrap");
+
+let cx = 0;
+let cz = 0;
+
+function render2D(){
+
+    const range = 12;
+
+    for(let x=cx-range;x<=cx+range;x++){
+    for(let z=cz-range;z<=cz+range;z++){
+
+        const k = key(x,z);
+        const t = tiles[k];
+
+        let d = dom[k];
+
+        if(!d){
+
+            d = document.createElement("div");
+            d.className = "cell";
+
+            wrap.appendChild(d);
+
+            dom[k] = d;
+        }
+
+        d.style.left = (x-cx+range)*25 + "px";
+        d.style.top  = (z-cz+range)*25 + "px";
+
+        if(!t){
+
+            d.style.background = "#111";
+            d.style.backgroundImage = "";
+
+        }else{
+
+            d.style.backgroundImage = `url(${tileTypes[t.m]})`;
+        }
+
+        /* CURSOR */
+        if(x===cx && z===cz){
+
+            d.style.outline = "2px solid red";
+
+        }else{
+
+            d.style.outline = "none";
+        }
+
+    }}
+
+}
+
+/* =========================
+   3D
+========================= */
+
+const canvas = document.getElementById("view");
+
+const renderer = new THREE.WebGLRenderer({
+    canvas,
+    antialias:true
+});
+
+renderer.setSize(window.innerWidth/2, window.innerHeight);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x222222);
+
+const camera = new THREE.PerspectiveCamera(
+75,
+(window.innerWidth/2)/window.innerHeight,
+0.1,
+1000
+);
+
+/* LIGHT */
+
+const light1 = new THREE.DirectionalLight(0xffffff,2);
+light1.position.set(10,10,10);
+scene.add(light1);
+
+const topLight = new THREE.DirectionalLight(0xffffff,1.2);
+topLight.position.set(0,20,0);
+scene.add(topLight);
+
+scene.add(new THREE.AmbientLight(0xffffff,0.7));
+
+let meshes = [];
+
+function update3D(){
+
+    meshes.forEach(m=>scene.remove(m));
+    meshes = [];
+
+    for(const k in tiles){
+
+        const t = tiles[k];
+
+        const [x,z] = k.split(",").map(Number);
+
+        const geo = new THREE.BoxGeometry(
+            1,
+            t.h*0.25 + 0.25,
+            1
+        );
+
+        const mat = new THREE.MeshStandardMaterial({
+            map:textures[t.m]
+        });
+
+        const mesh = new THREE.Mesh(geo,mat);
+
+        mesh.position.set(
+            x-cx,
+            (t.h*0.25)/2,
+            z-cz
+        );
+
+        scene.add(mesh);
+
+        meshes.push(mesh);
+    }
+}
+
+/* =========================
+   MENU
+========================= */
+
+const sidebar = document.getElementById("sidebar");
+
+document.getElementById("toggleMenu").onclick = ()=>{
+
+    sidebar.classList.toggle("hidden");
+
+};
+
+/* =========================
+   SLOT
+========================= */
+
+document.getElementById("assignSlot").onclick = ()=>{
+
+    const slot = document.getElementById("slotSelect").value;
+
+    slots[slot] = selectedTile;
+};
+
+/* =========================
+   ERASE
+========================= */
+
+let eraseMode = false;
+
+document.getElementById("eraseBtn").onclick = ()=>{
+
+    eraseMode = !eraseMode;
+
+    document.getElementById("eraseBtn").textContent =
+        "ERASE : " + (eraseMode ? "ON" : "OFF");
+
+};
+
+/* =========================
+   PLACE
+========================= */
+
+function placeTile(){
+
+    const k = key(cx,cz);
+
+    if(eraseMode){
+
+        delete tiles[k];
+
+    }else{
+
+        tiles[k] = {
+            h:get(cx,cz).h,
+            m:selectedTile
+        };
+    }
+
+    render2D();
+    update3D();
+}
+
+/* CLICK */
+
+wrap.addEventListener("click",placeTile);
+
+/* =========================
+   KEYBOARD
+========================= */
+
+window.addEventListener("keydown",(e)=>{
+
+    if(e.key==="w") cz--;
+    if(e.key==="s") cz++;
+    if(e.key==="a") cx--;
+    if(e.key==="d") cx++;
+
+    if(e.key==="q") get(cx,cz).h++;
+    if(e.key==="e") get(cx,cz).h--;
+
+    if(e.key==="Delete"){
+
+        delete tiles[key(cx,cz)];
+    }
+
+    if(slots[e.key]){
+
+        selectedTile = slots[e.key];
+        tileSelect.value = selectedTile;
+    }
+
+    if(e.key==="0"){
+
+        sidebar.classList.toggle("hidden");
+    }
+
+    render2D();
+    update3D();
+
+});
+
+/* =========================
+   SAVE
+========================= */
+
+document.getElementById("saveBtn").onclick = ()=>{
+
+    const objects = [];
+
+    let index = 0;
+
+    for(const k in tiles){
+
+        const t = tiles[k];
+
+        const [x,z] = k.split(",").map(Number);
+
+        objects.push({
+
+            id:"tile_" + index,
+
+            name:"tile_" + index,
+
+            type:"tile",
+
+            position:{
+                x:Number(x),
+                y:Number((t.h * 0.25) / 2),
+                z:Number(z)
+            },
+
+            rotation:{
+                x:0,
+                y:0,
+                z:0
+            },
+
+            scale:{
+                x:1,
+                y:Number(t.h * 0.25 + 0.25),
+                z:1
+            },
+
+            material:t.m,
+
+            collider:true,
+
+            physics:false
+
+        });
+
+        index++;
+    }
+
+    const blob = new Blob(
+        [JSON.stringify(objects,null,2)],
+        {type:"application/json"}
+    );
+
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+
+    a.href = url;
+
+    a.download = "map.json";
+
+    a.click();
+
+    URL.revokeObjectURL(url);
+
+};
+
+/* =========================
+   LOAD
+========================= */
+
+document.getElementById("loadBtn").onclick = ()=>{
+
+    document.getElementById("fileLoad").click();
+
+};
+
+document.getElementById("fileLoad").onchange = (e)=>{
+
+    const file = e.target.files[0];
+
+    if(!file) return;
+
+    const reader = new FileReader();
+
+    reader.onload = (ev)=>{
+
+        const data = JSON.parse(ev.target.result);
+
+        /* 全削除 */
+
+        for(const k in tiles){
+
+            delete tiles[k];
+
+        }
+
+        /* 読み込み */
+
+        data.forEach(obj=>{
+
+            if(obj.type !== "tile") return;
+
+            const x = Math.round(obj.position.x);
+            const z = Math.round(obj.position.z);
+
+            const h =
+                (obj.scale.y - 0.25) / 0.25;
+
+            tiles[key(x,z)] = {
+
+                h:h,
+
+                m:obj.material || "grass"
+
+            };
+
+        });
+
+        render2D();
+
+        update3D();
+
+    };
+
+    reader.readAsText(file);
+
+};
+
+/* =========================
+   CAMERA
+========================= */
+
+let rx = 0;
+let ry = -0.4;
+let dist = 20;
+
+let drag = false;
+let lx = 0;
+let ly = 0;
+
+canvas.addEventListener("mousedown",(e)=>{
+
+    drag = true;
+
+    lx = e.clientX;
+    ly = e.clientY;
+});
+
+window.addEventListener("mouseup",()=>drag=false);
+
+window.addEventListener("mousemove",(e)=>{
+
+    if(!drag) return;
+
+    rx += (e.clientX-lx)*0.01;
+    ry += (e.clientY-ly)*0.01;
+
+    ry = Math.max(-1.2, Math.min(0, ry));
+
+    lx = e.clientX;
+    ly = e.clientY;
+});
+
+window.addEventListener("wheel",(e)=>{
+
+    dist += e.deltaY * 0.01;
+
+    dist = Math.max(5,Math.min(50,dist));
+});
+
+/* =========================
+   CAMERA UPDATE
+========================= */
+
+function updateCamera(){
+
+    camera.position.x = Math.sin(rx)*dist;
+    camera.position.z = Math.cos(rx)*dist;
+
+    camera.position.y = 10 + ry*10;
+
+    camera.lookAt(0,0,0);
+}
+
+/* =========================
+   LOOP
+========================= */
+
+function animate(){
+
+    requestAnimationFrame(animate);
+
+    updateCamera();
+
+    renderer.render(scene,camera);
+}
+
+render2D();
+update3D();
+animate();
+
+</script>
+
+</body>
+</html>

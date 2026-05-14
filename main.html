@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GAME</title>
+
+<style>
+body{
+    margin:0;
+    overflow:hidden;
+    background:black;
+    font-family:sans-serif;
+}
+
+/* UI */
+
+#fileInput{
+    position:fixed;
+    top:10px;
+    left:10px;
+    z-index:10;
+}
+
+#info{
+    position:fixed;
+    top:50px;
+    left:10px;
+    z-index:10;
+
+    color:white;
+    background:rgba(0,0,0,0.5);
+
+    padding:10px;
+    border-radius:8px;
+
+    line-height:1.6;
+}
+</style>
+</head>
+
+<body>
+
+<input type="file" id="fileInput">
+
+<div id="info">
+WASD : MOVE<br>
+SPACE : JUMP<br>
+MOUSE DRAG : CAMERA
+</div>
+
+<script type="module">
+
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160/build/three.module.js";
+
+/* =========================
+   SCENE
+========================= */
+
+const scene = new THREE.Scene();
+
+scene.background = new THREE.Color(0x87ceeb);
+
+/* =========================
+   CAMERA
+========================= */
+
+const camera = new THREE.PerspectiveCamera(
+    75,
+    window.innerWidth / window.innerHeight,
+    0.1,
+    1000
+);
+
+/* =========================
+   RENDERER
+========================= */
+
+const renderer = new THREE.WebGLRenderer({
+    antialias:true
+});
+
+renderer.setSize(
+    window.innerWidth,
+    window.innerHeight
+);
+
+document.body.appendChild(renderer.domElement);
+
+/* =========================
+   LIGHT
+========================= */
+
+const sun = new THREE.DirectionalLight(
+    0xffffff,
+    2
+);
+
+sun.position.set(10,20,10);
+
+scene.add(sun);
+
+scene.add(
+    new THREE.AmbientLight(0xffffff,0.7)
+);
+
+/* =========================
+   TEXTURES
+========================= */
+
+const textureLoader =
+    new THREE.TextureLoader();
+
+const textures = {
+
+    grass:textureLoader.load(
+        "textures/grass.png"
+    ),
+
+    stone:textureLoader.load(
+        "textures/stone.png"
+    ),
+
+    sand:textureLoader.load(
+        "textures/sand.png"
+    ),
+
+    brick:textureLoader.load(
+        "textures/brick.png"
+    ),
+
+    soil:textureLoader.load(
+        "textures/soil.png"
+    )
+
+};
+
+for(const k in textures){
+
+    textures[k].magFilter =
+        THREE.NearestFilter;
+}
+
+/* =========================
+   PLAYER
+========================= */
+
+const playerGeo =
+    new THREE.BoxGeometry(1,2,1);
+
+const playerMat =
+    new THREE.MeshStandardMaterial({
+        color:0xff4444
+    });
+
+const player =
+    new THREE.Mesh(playerGeo,playerMat);
+
+player.position.set(0,3,0);
+
+scene.add(player);
+
+/* =========================
+   PLAYER PHYSICS
+========================= */
+
+let velocityY = 0;
+
+const gravity = 0.015;
+
+let onGround = false;
+
+const playerSize = {
+    x:0.8,
+    y:2,
+    z:0.8
+};
+
+/* =========================
+   INPUT
+========================= */
+
+const keys = {};
+
+window.addEventListener("keydown",(e)=>{
+
+    keys[e.key.toLowerCase()] = true;
+
+    /* JUMP */
+
+    if(e.code === "Space" && onGround){
+
+        velocityY = 0.32;
+
+        onGround = false;
+    }
+});
+
+window.addEventListener("keyup",(e)=>{
+
+    keys[e.key.toLowerCase()] = false;
+});
+
+/* =========================
+   MAP
+========================= */
+
+const mapObjects = [];
+
+/* =========================
+   FILE LOAD
+========================= */
+
+document
+.getElementById("fileInput")
+.addEventListener("change",(e)=>{
+
+    const file = e.target.files[0];
+
+    if(!file) return;
+
+    const reader = new FileReader();
+
+    reader.onload = (ev)=>{
+
+        const data =
+            JSON.parse(ev.target.result);
+
+        loadMap(data);
+    };
+
+    reader.readAsText(file);
+});
+
+/* =========================
+   LOAD MAP
+========================= */
+
+function loadMap(data){
+
+    /* REMOVE OLD */
+
+    mapObjects.forEach(obj=>{
+
+        scene.remove(obj);
+
+    });
+
+    mapObjects.length = 0;
+
+    /* CREATE */
+
+    data.forEach(obj=>{
+
+        if(obj.type !== "tile") return;
+
+        const geo =
+            new THREE.BoxGeometry(
+                obj.scale.x,
+                obj.scale.y,
+                obj.scale.z
+            );
+
+        const mat =
+            new THREE.MeshStandardMaterial({
+
+                map:
+                    textures[obj.material]
+                    || textures.grass
+
+            });
+
+        const mesh =
+            new THREE.Mesh(geo,mat);
+
+        mesh.position.set(
+            obj.position.x,
+            obj.position.y,
+            obj.position.z
+        );
+
+        mesh.userData.collider =
+            obj.collider;
+
+        scene.add(mesh);
+
+        mapObjects.push(mesh);
+
+    });
+
+}
+
+/* =========================
+   COLLISION
+========================= */
+
+function checkCollision(x,y,z){
+
+    for(const obj of mapObjects){
+
+        if(!obj.userData.collider)
+            continue;
+
+        const dx =
+            Math.abs(
+                x - obj.position.x
+            );
+
+        const dy =
+            Math.abs(
+                y - obj.position.y
+            );
+
+        const dz =
+            Math.abs(
+                z - obj.position.z
+            );
+
+        const sx =
+            (playerSize.x + obj.scale.x)
+            / 2;
+
+        const sy =
+            (playerSize.y + obj.scale.y)
+            / 2;
+
+        const sz =
+            (playerSize.z + obj.scale.z)
+            / 2;
+
+        if(
+            dx < sx &&
+            dy < sy &&
+            dz < sz
+        ){
+            return obj;
+        }
+    }
+
+    return null;
+}
+
+/* =========================
+   PLAYER UPDATE
+========================= */
+
+function updatePlayer(){
+
+    const speed = 0.08;
+
+    let moveX = 0;
+    let moveZ = 0;
+
+    if(keys["w"]) moveZ -= speed;
+    if(keys["s"]) moveZ += speed;
+
+    if(keys["a"]) moveX -= speed;
+    if(keys["d"]) moveX += speed;
+
+    /* =========================
+       X COLLISION
+    ========================= */
+
+    let nextX =
+        player.position.x + moveX;
+
+    if(
+        !checkCollision(
+            nextX,
+            player.position.y,
+            player.position.z
+        )
+    ){
+        player.position.x = nextX;
+    }
+
+    /* =========================
+       Z COLLISION
+    ========================= */
+
+    let nextZ =
+        player.position.z + moveZ;
+
+    if(
+        !checkCollision(
+            player.position.x,
+            player.position.y,
+            nextZ
+        )
+    ){
+        player.position.z = nextZ;
+    }
+
+    /* =========================
+       GRAVITY
+    ========================= */
+
+    velocityY -= gravity;
+
+    let nextY =
+        player.position.y + velocityY;
+
+    const hit =
+        checkCollision(
+            player.position.x,
+            nextY,
+            player.position.z
+        );
+
+    if(hit){
+
+        const top =
+            hit.position.y +
+            hit.scale.y/2 +
+            playerSize.y/2;
+
+        /* FALLING */
+
+        if(velocityY <= 0){
+
+            player.position.y = top;
+
+            velocityY = 0;
+
+            onGround = true;
+        }
+
+    }else{
+
+        player.position.y = nextY;
+
+        onGround = false;
+    }
+
+}
+
+/* =========================
+   CAMERA CONTROL
+========================= */
+
+let camRotX = 0;
+let camRotY = 0.4;
+
+let camDist = 10;
+
+let dragging = false;
+
+let lastX = 0;
+let lastY = 0;
+
+renderer.domElement.addEventListener(
+    "mousedown",
+    (e)=>{
+
+        dragging = true;
+
+        lastX = e.clientX;
+        lastY = e.clientY;
+    }
+);
+
+window.addEventListener(
+    "mouseup",
+    ()=> dragging = false
+);
+
+window.addEventListener(
+    "mousemove",
+    (e)=>{
+
+        if(!dragging) return;
+
+        camRotX +=
+            (e.clientX - lastX) * 0.005;
+
+        camRotY +=
+            (e.clientY - lastY) * 0.005;
+
+        camRotY =
+            Math.max(
+                -1.2,
+                Math.min(1.2, camRotY)
+            );
+
+        lastX = e.clientX;
+        lastY = e.clientY;
+    }
+);
+
+/* =========================
+   CAMERA UPDATE
+========================= */
+
+function updateCamera(){
+
+    const px = player.position.x;
+    const py = player.position.y;
+    const pz = player.position.z;
+
+    camera.position.x =
+        px + Math.sin(camRotX) * camDist;
+
+    camera.position.z =
+        pz + Math.cos(camRotX) * camDist;
+
+    camera.position.y =
+        py + 4 + camRotY * 5;
+
+    camera.lookAt(
+        px,
+        py + 1,
+        pz
+    );
+}
+
+/* =========================
+   RESIZE
+========================= */
+
+window.addEventListener(
+    "resize",
+    ()=>{
+
+        camera.aspect =
+            window.innerWidth /
+            window.innerHeight;
+
+        camera.updateProjectionMatrix();
+
+        renderer.setSize(
+            window.innerWidth,
+            window.innerHeight
+        );
+    }
+);
+
+/* =========================
+   LOOP
+========================= */
+
+function animate(){
+
+    requestAnimationFrame(animate);
+
+    updatePlayer();
+
+    updateCamera();
+
+    renderer.render(scene,camera);
+}
+
+animate();
+
+</script>
+
+</body>
+</html>

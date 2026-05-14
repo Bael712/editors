@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PART EDITOR</title>
+
+<style>
+body{
+    margin:0;
+    overflow:hidden;
+    background:#111;
+    color:white;
+    font-family:sans-serif;
+}
+
+#ui{
+    position:absolute;
+    left:0;
+    top:0;
+    width:260px;
+    height:100vh;
+    overflow-y:auto;
+    background:rgba(0,0,0,0.9);
+    padding:10px;
+    z-index:100;
+
+    transition: transform 0.25s ease;
+    transform: translateX(0);
+}
+
+#ui.hidden{
+    transform: translateX(-100%);
+}
+
+#menuBtn{
+    position:fixed;
+    top:10px;
+    left:10px;
+    z-index:200;
+
+    width:36px;
+    height:36px;
+
+    border:none;
+    border-radius:8px;
+    background:#2d88ff;
+    color:white;
+    font-size:18px;
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
+}
+
+#menuBtn:active{
+    background:#58a2ff;
+}
+
+button,select,input{
+    width:100%;
+    margin-top:8px;
+    padding:8px;
+    border:none;
+    border-radius:6px;
+    background:#222;
+    color:white;
+    font-size:13px;
+}
+
+button{
+    background:#2d88ff;
+}
+
+label{
+    display:block;
+    margin-top:10px;
+    font-size:13px;
+}
+
+#cameraHelp{
+    position:absolute;
+    right:10px;
+    bottom:10px;
+    background:rgba(0,0,0,0.8);
+    padding:10px;
+    border-radius:8px;
+    font-size:12px;
+}
+</style>
+</head>
+
+<body>
+
+<button id="menuBtn">≡</button>
+
+<div id="ui">
+
+<h3>PART EDITOR</h3>
+
+<select id="type">
+<option value="box">BOX</option>
+<option value="sphere">SPHERE</option>
+<option value="cylinder">CYLINDER</option>
+</select>
+
+<button id="add">ADD</button>
+<button id="rotY">ROT Y</button>
+<button id="rotX">ROT X</button>
+<button id="dup">DUPLICATE</button>
+
+<button id="save">SAVE</button>
+<input type="file" id="load">
+
+<select id="list"></select>
+
+<input type="color" id="color" value="#00ffff">
+
+<h4>SIZE</h4>
+
+<input type="range" id="sx" min="0.1" max="5" step="0.1" value="1">
+<input type="range" id="sy" min="0.1" max="5" step="0.1" value="1">
+<input type="range" id="sz" min="0.1" max="5" step="0.1" value="1">
+
+<h4>TRANSPARENCY</h4>
+
+<input type="range" id="alpha" min="0" max="1" step="0.05" value="1">
+
+<h4>MATERIAL</h4>
+
+<select id="materialType">
+<option value="metal">METAL</option>
+<option value="wood">WOOD</option>
+<option value="stone">STONE</option>
+<option value="glass">GLASS</option>
+<option value="grass">GRASS</option>
+</select>
+
+<label>
+<input type="checkbox" id="collider" checked>
+COLLIDER
+</label>
+
+<label>
+<input type="checkbox" id="physics">
+GRAVITY
+</label>
+
+<p>
+WASD = MOVE<br>
+Q/E = UP/DOWN
+</p>
+
+</div>
+
+<div id="cameraHelp">
+DRAG = ROTATE<br>
+WHEEL = ZOOM
+</div>
+
+<script type="module">
+
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160/build/three.module.js";
+
+// =====================
+// シーン
+// =====================
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x222222);
+
+const camera = new THREE.PerspectiveCamera(
+75,
+innerWidth / innerHeight,
+0.1,
+1000
+);
+
+let camX = 0;
+let camY = 0;
+let dist = 10;
+
+const renderer = new THREE.WebGLRenderer({
+antialias:true
+});
+
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.GridHelper(50,50));
+
+const light = new THREE.DirectionalLight(0xffffff,3);
+light.position.set(5,10,7);
+scene.add(light);
+
+scene.add(new THREE.AmbientLight(0xffffff,1));
+
+// =====================
+// データ
+// =====================
+const parts = [];
+let selected = null;
+
+// =====================
+// UI取得
+// =====================
+const ui = document.getElementById("ui");
+const menuBtn = document.getElementById("menuBtn");
+
+const add = document.getElementById("add");
+const rotY = document.getElementById("rotY");
+const rotX = document.getElementById("rotX");
+const dup = document.getElementById("dup");
+
+const save = document.getElementById("save");
+const load = document.getElementById("load");
+
+const type = document.getElementById("type");
+const list = document.getElementById("list");
+
+const color = document.getElementById("color");
+
+const sx = document.getElementById("sx");
+const sy = document.getElementById("sy");
+const sz = document.getElementById("sz");
+
+const alpha = document.getElementById("alpha");
+
+const materialType = document.getElementById("materialType");
+const collider = document.getElementById("collider");
+const physics = document.getElementById("physics");
+
+// =====================
+// UI開閉
+// =====================
+let open = true;
+
+function updateMenu(){
+ui.classList.toggle("hidden", !open);
+menuBtn.textContent = open ? "✕" : "≡";
+}
+
+menuBtn.onclick = () => {
+open = !open;
+updateMenu();
+};
+
+updateMenu();
+
+// =====================
+// 作成
+// =====================
+function addPart(){
+
+let geo;
+
+if(type.value==="box"){
+geo = new THREE.BoxGeometry(1,1,1);
+}
+
+if(type.value==="sphere"){
+geo = new THREE.SphereGeometry(0.7,32,32);
+}
+
+if(type.value==="cylinder"){
+geo = new THREE.CylinderGeometry(0.5,0.5,1.5,32);
+}
+
+const m = new THREE.Mesh(
+geo,
+new THREE.MeshStandardMaterial({
+color:0x00ffff,
+transparent:true,
+opacity:1
+})
+);
+
+m.position.y = 0.5;
+
+m.userData = {
+type:type.value,
+material:"metal",
+collider:true,
+physics:false
+};
+
+scene.add(m);
+parts.push(m);
+
+const o = document.createElement("option");
+
+o.value = parts.length - 1;
+o.textContent = type.value + " " + parts.length;
+
+list.appendChild(o);
+
+select(parts.length - 1);
+}
+
+// =====================
+// 選択
+// =====================
+function select(i){
+
+selected = parts[i];
+
+if(!selected) return;
+
+sx.value = selected.scale.x;
+sy.value = selected.scale.y;
+sz.value = selected.scale.z;
+
+alpha.value = selected.material.opacity;
+
+color.value = "#" + selected.material.color.getHexString();
+
+materialType.value = selected.userData.material || "metal";
+
+collider.checked = selected.userData.collider;
+physics.checked = selected.userData.physics;
+
+list.value = i;
+}
+
+// =====================
+// 回転
+// =====================
+rotY.onclick = () => {
+if(selected){
+selected.rotation.y += Math.PI / 6;
+}
+};
+
+rotX.onclick = () => {
+if(selected){
+selected.rotation.x += Math.PI / 6;
+}
+};
+
+// =====================
+// 複製
+// =====================
+dup.onclick = () => {
+
+if(!selected) return;
+
+const m = new THREE.Mesh(
+selected.geometry,
+selected.material.clone()
+);
+
+m.position.copy(selected.position);
+m.position.x += 1;
+
+m.rotation.copy(selected.rotation);
+m.scale.copy(selected.scale);
+
+m.userData = {
+...selected.userData
+};
+
+scene.add(m);
+
+parts.push(m);
+
+const o = document.createElement("option");
+
+o.value = parts.length - 1;
+o.textContent = m.userData.type + " " + parts.length;
+
+list.appendChild(o);
+
+select(parts.length - 1);
+};
+
+// =====================
+// 保存
+// =====================
+save.onclick = () => {
+
+const data = parts.map((p,index)=>({
+
+id:"obj_" + index,
+
+name:p.userData.type + "_" + index,
+
+type:p.userData.type,
+
+position:{
+x:Number(p.position.x),
+y:Number(p.position.y),
+z:Number(p.position.z)
+},
+
+rotation:{
+x:Number(p.rotation.x),
+y:Number(p.rotation.y),
+z:Number(p.rotation.z)
+},
+
+scale:{
+x:Number(p.scale.x),
+y:Number(p.scale.y),
+z:Number(p.scale.z)
+},
+
+color:"#"+p.material.color.getHexString(),
+
+opacity:Number(p.material.opacity),
+
+material:p.userData.material,
+
+collider:p.userData.collider,
+
+physics:p.userData.physics
+
+}));
+
+const blob = new Blob(
+[JSON.stringify(data,null,2)],
+{type:"application/json"}
+);
+
+const url = URL.createObjectURL(blob);
+
+const a = document.createElement("a");
+
+a.href = url;
+a.download = "scene.json";
+a.click();
+
+URL.revokeObjectURL(url);
+};
+
+// =====================
+// 読み込み
+// =====================
+load.onchange = (e) => {
+
+const file = e.target.files[0];
+
+if(!file) return;
+
+const reader = new FileReader();
+
+reader.onload = (ev) => {
+
+parts.forEach(p => scene.remove(p));
+
+parts.length = 0;
+
+list.innerHTML = "";
+
+const data = JSON.parse(ev.target.result);
+
+data.forEach(d => {
+
+let geo;
+
+if(d.type==="box"){
+geo = new THREE.BoxGeometry(1,1,1);
+}
+
+if(d.type==="sphere"){
+geo = new THREE.SphereGeometry(0.7,32,32);
+}
+
+if(d.type==="cylinder"){
+geo = new THREE.CylinderGeometry(0.5,0.5,1.5,32);
+}
+
+const m = new THREE.Mesh(
+geo,
+new THREE.MeshStandardMaterial({
+color:d.color,
+transparent:true,
+opacity:d.opacity
+})
+);
+
+m.position.set(
+d.position.x,
+d.position.y,
+d.position.z
+);
+
+m.rotation.set(
+d.rotation.x,
+d.rotation.y,
+d.rotation.z
+);
+
+m.scale.set(
+d.scale.x,
+d.scale.y,
+d.scale.z
+);
+
+m.userData = {
+type:d.type,
+material:d.material || "metal",
+collider:d.collider ?? true,
+physics:d.physics ?? false
+};
+
+scene.add(m);
+
+parts.push(m);
+
+const o = document.createElement("option");
+
+o.value = parts.length - 1;
+o.textContent = d.type + " " + parts.length;
+
+list.appendChild(o);
+
+});
+
+};
+
+reader.readAsText(file);
+};
+
+// =====================
+// UI操作
+// =====================
+add.onclick = addPart;
+
+list.onchange = () => {
+select(list.value);
+};
+
+color.oninput = () => {
+if(selected){
+selected.material.color.set(color.value);
+}
+};
+
+function updateScale(){
+
+if(!selected) return;
+
+selected.scale.set(
+parseFloat(sx.value),
+parseFloat(sy.value),
+parseFloat(sz.value)
+);
+
+}
+
+sx.oninput = updateScale;
+sy.oninput = updateScale;
+sz.oninput = updateScale;
+
+alpha.oninput = () => {
+
+if(selected){
+
+selected.material.opacity = parseFloat(alpha.value);
+
+selected.material.transparent = true;
+
+}
+
+};
+
+materialType.onchange = () => {
+
+if(!selected) return;
+
+selected.userData.material = materialType.value;
+
+};
+
+collider.onchange = () => {
+
+if(!selected) return;
+
+selected.userData.collider = collider.checked;
+
+};
+
+physics.onchange = () => {
+
+if(!selected) return;
+
+selected.userData.physics = physics.checked;
+
+};
+
+// =====================
+// 移動
+// =====================
+window.addEventListener("keydown",(e)=>{
+
+if(!selected) return;
+
+if(e.key==="w") selected.position.z -= 0.2;
+if(e.key==="s") selected.position.z += 0.2;
+
+if(e.key==="a") selected.position.x -= 0.2;
+if(e.key==="d") selected.position.x += 0.2;
+
+if(e.key==="q") selected.position.y += 0.2;
+if(e.key==="e") selected.position.y -= 0.2;
+
+if(e.key==="Delete"){
+
+scene.remove(selected);
+
+parts.splice(list.value,1);
+
+list.remove(list.selectedIndex);
+
+selected = null;
+
+}
+
+});
+
+// =====================
+// カメラ
+// =====================
+let drag = false;
+
+let lx = 0;
+let ly = 0;
+
+renderer.domElement.addEventListener("pointerdown",(e)=>{
+
+drag = true;
+
+lx = e.clientX;
+ly = e.clientY;
+
+});
+
+window.addEventListener("pointerup",()=>{
+
+drag = false;
+
+});
+
+window.addEventListener("pointermove",(e)=>{
+
+if(!drag) return;
+
+camX += (e.clientX - lx) * 0.01;
+camY += (e.clientY - ly) * 0.01;
+
+lx = e.clientX;
+ly = e.clientY;
+
+});
+
+window.addEventListener("wheel",(e)=>{
+
+dist += e.deltaY * 0.01;
+
+dist = Math.max(2, Math.min(50, dist));
+
+});
+
+// =====================
+// ループ
+// =====================
+function animate(){
+
+requestAnimationFrame(animate);
+
+camera.position.x = Math.sin(camX) * dist;
+camera.position.z = Math.cos(camX) * dist;
+camera.position.y = 5 + camY * 5;
+
+camera.lookAt(0,0,0);
+
+renderer.render(scene,camera);
+
+}
+
+animate();
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,542 @@
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PIXEL TILE CREATOR PRO</title>
+
+<style>
+body{
+    margin:0;
+    background:#111;
+    color:white;
+    font-family:sans-serif;
+    display:flex;
+    overflow:hidden;
+    height:100vh;
+}
+
+#sidebar{
+    width:300px;
+    background:#1a1a1a;
+    border-right:2px solid #333;
+    padding:15px;
+    overflow-y:auto;
+}
+
+#main{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    position:relative;
+}
+
+canvas{
+    image-rendering:pixelated;
+}
+
+#editor{
+    border:2px solid #444;
+    background:#222;
+    cursor:crosshair;
+}
+
+#preview{
+    margin-top:20px;
+    border:2px solid #444;
+}
+
+button{
+    width:100%;
+    margin-top:8px;
+    padding:10px;
+    border:none;
+    border-radius:6px;
+    background:#333;
+    color:white;
+    cursor:pointer;
+}
+
+button:hover{
+    background:#555;
+}
+
+.buttonActive{
+    background:#0a84ff;
+}
+
+.section{
+    margin-bottom:25px;
+}
+
+#zoomInfo{
+    margin-top:10px;
+    font-size:14px;
+}
+
+#info{
+    position:absolute;
+    bottom:10px;
+    right:10px;
+    background:rgba(0,0,0,0.7);
+    padding:12px;
+    border-radius:10px;
+    line-height:1.7;
+    font-size:13px;
+}
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+
+<h2>PIXEL TILE PRO</h2>
+
+<div class="section">
+<label>色</label>
+<input type="color" id="colorPicker" value="#55aa55">
+</div>
+
+<div class="section">
+<label>タイルサイズ</label>
+<button onclick="setResolution(16)">16 x 16</button>
+<button onclick="setResolution(32)">32 x 32</button>
+<button onclick="setResolution(64)">64 x 64</button>
+<button onclick="setResolution(128)">128 x 128</button>
+</div>
+
+<div class="section">
+<label>ツール</label>
+<button class="tool buttonActive" data-tool="pen">ペン</button>
+<button class="tool" data-tool="eraser">消しゴム</button>
+<button class="tool" data-tool="picker">スポイト</button>
+<button class="tool" data-tool="fill">塗りつぶし</button>
+</div>
+
+<div class="section">
+<label>表示</label>
+<button id="gridButton" class="buttonActive">グリッド ON</button>
+<div id="zoomInfo">ZOOM : 16x</div>
+</div>
+
+<div class="section">
+<label>鏡モード</label>
+<button id="mirrorX">左右ミラー OFF</button>
+<button id="mirrorY">上下ミラー OFF</button>
+</div>
+
+<div class="section">
+<button onclick="clearCanvas()">全消去</button>
+<button onclick="savePNG()">PNG保存</button>
+</div>
+
+<div class="section">
+<label>PNG読み込み</label>
+<input type="file" id="fileInput" accept="image/png">
+</div>
+
+</div>
+
+<div id="main">
+
+<canvas id="editor" width="640" height="640"></canvas>
+<canvas id="preview" width="320" height="320"></canvas>
+
+<div id="info">
+ホイール : ズーム<br>
+右ドラッグ : キャンバス移動<br>
+左クリック : 描画<br>
+シームレスプレビュー対応
+</div>
+
+</div>
+
+<script>
+const canvas = document.getElementById('editor');
+const ctx = canvas.getContext('2d');
+
+const preview = document.getElementById('preview');
+const pctx = preview.getContext('2d');
+
+const colorPicker = document.getElementById('colorPicker');
+const fileInput = document.getElementById('fileInput');
+const zoomInfo = document.getElementById('zoomInfo');
+const gridButton = document.getElementById('gridButton');
+const mirrorXButton = document.getElementById('mirrorX');
+const mirrorYButton = document.getElementById('mirrorY');
+
+let resolution = 32;
+let zoom = 16;
+let pixelSize = zoom;
+
+let showGrid = true;
+let mirrorX = false;
+let mirrorY = false;
+
+let currentTool = 'pen';
+let drawing = false;
+
+let offsetX = 0;
+let offsetY = 0;
+let panning = false;
+let lastPanX = 0;
+let lastPanY = 0;
+
+const pixels = [];
+
+function initPixels(){
+
+    pixels.length = 0;
+
+    for(let y=0;y<resolution;y++){
+
+        const row = [];
+
+        for(let x=0;x<resolution;x++){
+            row.push('transparent');
+        }
+
+        pixels.push(row);
+    }
+}
+
+initPixels();
+render();
+
+const toolButtons = document.querySelectorAll('.tool');
+
+toolButtons.forEach(btn=>{
+
+    btn.addEventListener('click', ()=>{
+
+        toolButtons.forEach(b=>b.classList.remove('buttonActive'));
+        btn.classList.add('buttonActive');
+
+        currentTool = btn.dataset.tool;
+    });
+});
+
+gridButton.addEventListener('click', ()=>{
+
+    showGrid = !showGrid;
+
+    gridButton.textContent = showGrid ? 'グリッド ON' : 'グリッド OFF';
+
+    if(showGrid){
+        gridButton.classList.add('buttonActive');
+    }else{
+        gridButton.classList.remove('buttonActive');
+    }
+
+    render();
+});
+
+mirrorXButton.addEventListener('click', ()=>{
+
+    mirrorX = !mirrorX;
+
+    mirrorXButton.textContent = mirrorX ? '左右ミラー ON' : '左右ミラー OFF';
+
+    mirrorXButton.classList.toggle('buttonActive');
+});
+
+mirrorYButton.addEventListener('click', ()=>{
+
+    mirrorY = !mirrorY;
+
+    mirrorYButton.textContent = mirrorY ? '上下ミラー ON' : '上下ミラー OFF';
+
+    mirrorYButton.classList.toggle('buttonActive');
+});
+
+canvas.addEventListener('contextmenu',(e)=>{
+    e.preventDefault();
+});
+
+canvas.addEventListener('mousedown',(e)=>{
+
+    if(e.button === 2){
+
+        panning = true;
+        lastPanX = e.clientX;
+        lastPanY = e.clientY;
+
+        return;
+    }
+});
+
+window.addEventListener('mousemove',(e)=>{
+
+    if(!panning) return;
+
+    offsetX += e.clientX - lastPanX;
+    offsetY += e.clientY - lastPanY;
+
+    lastPanX = e.clientX;
+    lastPanY = e.clientY;
+
+    render();
+});
+
+window.addEventListener('mouseup',()=>{
+    panning = false;
+});
+
+canvas.addEventListener('wheel',(e)=>{
+
+    e.preventDefault();
+
+    if(e.deltaY < 0){
+        zoom += 2;
+    }else{
+        zoom -= 2;
+    }
+
+    zoom = Math.max(4,Math.min(64,zoom));
+
+    pixelSize = zoom;
+
+    zoomInfo.textContent = 'ZOOM : ' + zoom + 'x';
+
+    render();
+});
+
+canvas.addEventListener('mousedown',(e)=>{
+
+    if(e.button !== 0) return;
+
+    drawing = true;
+    handleDraw(e);
+});
+
+canvas.addEventListener('mousemove',(e)=>{
+
+    if(e.buttons !== 1) return;
+
+    if(drawing) handleDraw(e);
+});
+
+window.addEventListener('mouseup',()=>{
+    drawing = false;
+});
+
+function handleDraw(e){
+
+    const rect = canvas.getBoundingClientRect();
+
+    const x = Math.floor(((e.clientX - rect.left) - offsetX) / pixelSize);
+
+    const y = Math.floor(((e.clientY - rect.top) - offsetY) / pixelSize);
+
+    if(x < 0 || y < 0 || x >= resolution || y >= resolution) return;
+
+    applyTool(x,y);
+
+    if(mirrorX){
+        applyTool(resolution-1-x,y);
+    }
+
+    if(mirrorY){
+        applyTool(x,resolution-1-y);
+    }
+
+    if(mirrorX && mirrorY){
+        applyTool(resolution-1-x,resolution-1-y);
+    }
+
+    render();
+}
+
+function applyTool(x,y){
+
+    if(currentTool === 'pen'){
+        pixels[y][x] = colorPicker.value;
+    }
+
+    if(currentTool === 'eraser'){
+        pixels[y][x] = 'transparent';
+    }
+
+    if(currentTool === 'picker'){
+        colorPicker.value = pixels[y][x];
+    }
+
+    if(currentTool === 'fill'){
+        floodFill(x,y,pixels[y][x],colorPicker.value);
+    }
+}
+
+function floodFill(x,y,target,newColor){
+
+    if(target === newColor) return;
+
+    if(x < 0 || y < 0 || x >= resolution || y >= resolution) return;
+
+    if(pixels[y][x] !== target) return;
+
+    pixels[y][x] = newColor;
+
+    floodFill(x+1,y,target,newColor);
+    floodFill(x-1,y,target,newColor);
+    floodFill(x,y+1,target,newColor);
+    floodFill(x,y-1,target,newColor);
+}
+
+function render(){
+
+    canvas.width = 640;
+    canvas.height = 640;
+
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    ctx.save();
+    ctx.translate(offsetX,offsetY);
+
+    const drawWidth = resolution * pixelSize;
+    const drawHeight = resolution * pixelSize;
+
+    ctx.imageSmoothingEnabled = false;
+
+    for(let y=0;y<resolution;y++){
+        for(let x=0;x<resolution;x++){
+
+            if(pixels[y][x] !== 'transparent'){
+                ctx.fillStyle = pixels[y][x];
+                ctx.fillRect(x*pixelSize,y*pixelSize,pixelSize,pixelSize);
+            }
+
+            if(showGrid){
+                ctx.beginPath();
+                ctx.strokeStyle = '#444';
+                ctx.lineWidth = 1;
+                ctx.rect(x*pixelSize+0.5,y*pixelSize+0.5,pixelSize,pixelSize);
+                ctx.stroke();
+            }
+        }
+    }
+
+    ctx.restore();
+
+    updatePreview();
+}
+
+function updatePreview(){
+
+    pctx.clearRect(0,0,preview.width,preview.height);
+
+    const temp = document.createElement('canvas');
+    temp.width = resolution;
+    temp.height = resolution;
+
+    const tctx = temp.getContext('2d');
+
+    for(let y=0;y<resolution;y++){
+        for(let x=0;x<resolution;x++){
+
+            if(pixels[y][x] !== 'transparent'){
+                tctx.fillStyle = pixels[y][x];
+                tctx.fillRect(x,y,1,1);
+            }
+        }
+    }
+
+    pctx.imageSmoothingEnabled = false;
+
+    const pattern = pctx.createPattern(temp,'repeat');
+
+    pctx.fillStyle = pattern;
+    pctx.fillRect(0,0,preview.width,preview.height);
+}
+
+function clearCanvas(){
+
+    initPixels();
+    render();
+    updatePreview();
+}
+
+function setResolution(size){
+
+    resolution = size;
+
+    initPixels();
+    render();
+}
+
+function savePNG(){
+
+    const exportCanvas = document.createElement('canvas');
+    exportCanvas.width = resolution;
+    exportCanvas.height = resolution;
+
+    const ectx = exportCanvas.getContext('2d');
+
+    for(let y=0;y<resolution;y++){
+        for(let x=0;x<resolution;x++){
+
+            if(pixels[y][x] !== 'transparent'){
+                ectx.fillStyle = pixels[y][x];
+                ectx.fillRect(x,y,1,1);
+            }
+        }
+    }
+
+    const link = document.createElement('a');
+    link.download = 'tile.png';
+    link.href = exportCanvas.toDataURL('image/png');
+    link.click();
+}
+
+fileInput.addEventListener('change',(e)=>{
+
+    const file = e.target.files[0];
+    if(!file) return;
+
+    const img = new Image();
+
+    img.onload = ()=>{
+
+        const temp = document.createElement('canvas');
+        temp.width = resolution;
+        temp.height = resolution;
+
+        const tctx = temp.getContext('2d');
+        tctx.drawImage(img,0,0,resolution,resolution);
+
+        const data = tctx.getImageData(0,0,resolution,resolution).data;
+
+        for(let y=0;y<resolution;y++){
+            for(let x=0;x<resolution;x++){
+
+                const i = (y*resolution+x)*4;
+
+                const r = data[i];
+                const g = data[i+1];
+                const b = data[i+2];
+
+                pixels[y][x] = rgbToHex(r,g,b);
+            }
+        }
+
+        render();
+    };
+
+    img.src = URL.createObjectURL(file);
+});
+
+function rgbToHex(r,g,b){
+
+    return '#' + [r,g,b].map(v=>{
+
+        const hex = v.toString(16);
+        return hex.length === 1 ? '0'+hex : hex;
+
+    }).join('');
+}
+</script>
+
+</body>
+</html>
